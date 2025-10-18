@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# scale the Django deployment, exercise load, and observe resource usage
+set -euo pipefail
+
+DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-messaging-app}"
+NAMESPACE="${KUBE_NAMESPACE:-default}"
+REPLICA_COUNT="${REPLICA_COUNT:-3}"
+LOAD_TEST_URL="${LOAD_TEST_URL:-}"
+
+kubectl scale deployment.apps/${DEPLOYMENT_NAME} \
+  --replicas="${REPLICA_COUNT}" \
+  --namespace "${NAMESPACE}"
+
+kubectl rollout status deployment.apps/${DEPLOYMENT_NAME} \
+  --namespace "${NAMESPACE}"
+
+kubectl get pods \
+  --namespace "${NAMESPACE}" \
+  --selector="app=${DEPLOYMENT_NAME}" -o wide
+
+if command -v wrk >/dev/null 2>&1; then
+  TARGET_URL="${LOAD_TEST_URL}"
+  if [[ -z "${TARGET_URL}" ]]; then
+    if command -v minikube >/dev/null 2>&1; then
+      MINIKUBE_IP="$(minikube ip)"
+      TARGET_URL="http://${MINIKUBE_IP}:30080/"
+    else
+      echo "LOAD_TEST_URL is not set and minikube is unavailable; skipping wrk" >&2
+    fi
+  fi
+
+  if [[ -n "${TARGET_URL}" ]]; then
+    echo "Running wrk against ${TARGET_URL}"
+    wrk -t2 -c10 -d30s "${TARGET_URL}" || echo "wrk completed with a non-zero status"
+  fi
+else
+  echo "wrk is not installed; skipping load testing" >&2
+fi
+
+if kubectl top pods --namespace "${NAMESPACE}" >/dev/null 2>&1; then
+  kubectl top pods --namespace "${NAMESPACE}"
+else
+  echo "kubectl top failed (metrics-server may not be installed); skipping resource metrics" >&2
+fi

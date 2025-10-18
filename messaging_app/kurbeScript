@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# bootstrap and validate a local Kubernetes cluster using Minikube
+set -euo pipefail
+
+PROFILE="${MINIKUBE_PROFILE:-alx-k8s}"
+DRIVER="${MINIKUBE_DRIVER:-docker}"
+
+if ! command -v minikube >/dev/null 2>&1; then
+  echo "minikube is required but not installed" >&2
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "kubectl is required but not installed" >&2
+  exit 1
+fi
+
+# Start minikube if it is not already running for the selected profile
+if ! minikube status -p "$PROFILE" >/dev/null 2>&1; then
+  echo "Starting minikube profile '$PROFILE' with driver '$DRIVER'..."
+  minikube start -p "$PROFILE" --driver="$DRIVER"
+else
+  echo "Minikube profile '$PROFILE' is already running"
+fi
+
+# Ensure kubeconfig is pointing at the chosen profile
+minikube update-context -p "$PROFILE" >/dev/null
+CURRENT_CONTEXT="$(kubectl config current-context)"
+echo "Using Kubernetes context: $CURRENT_CONTEXT"
+
+# Display cluster information and list available pods
+kubectl cluster-info
+kubectl get pods --all-namespaces

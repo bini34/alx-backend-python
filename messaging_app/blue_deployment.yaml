@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging-app-blue
+  labels:
+    app: messaging-app
+    color: blue
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: messaging-app
+      color: blue
+  template:
+    metadata:
+      labels:
+        app: messaging-app
+        color: blue
+    spec:
+      containers:
+        - name: messaging-app
+          image: ghcr.io/bini34/messaging-app:2.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: messaging_app.settings
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

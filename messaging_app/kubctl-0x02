@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# orchestrate blue/green deployments and inspect the new version
+set -euo pipefail
+
+NAMESPACE="${KUBE_NAMESPACE:-default}"
+BLUE_FILE="${BLUE_DEPLOYMENT_FILE:-blue_deployment.yaml}"
+GREEN_FILE="${GREEN_DEPLOYMENT_FILE:-green_deployment.yaml}"
+SERVICE_FILE="${SERVICE_FILE:-kubeservice.yaml}"
+
+kubectl apply -f "${BLUE_FILE}" --namespace "${NAMESPACE}"
+kubectl apply -f "${GREEN_FILE}" --namespace "${NAMESPACE}"
+kubectl apply -f "${SERVICE_FILE}" --namespace "${NAMESPACE}"
+
+kubectl get deployments --namespace "${NAMESPACE}"
+
+GREEN_POD="$(kubectl get pods \
+  --namespace "${NAMESPACE}" \
+  --selector="app=messaging-app,color=green" \
+  -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+
+if [[ -z "${GREEN_POD}" ]]; then
+  echo "Green pod not found; verify the deployment succeeded" >&2
+  kubectl get pods --namespace "${NAMESPACE}"
+  exit 1
+fi
+
+echo "Tail logs from ${GREEN_POD}"
+kubectl logs "${GREEN_POD}" --namespace "${NAMESPACE}" --tail=50
