@@ -19,8 +19,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
 	permission_classes = [IsAuthenticated, IsParticipantOfConversation]
 
 	def create(self, request, *args, **kwargs):
-		participants_ids = request.data.get('participants', [])
-		participants = User.objects.filter(user_id__in=participants_ids)
+		participant_ids = request.data.get('participants', [])
+		participants = User.objects.filter(user_id__in=participant_ids)
 		conversation = Conversation.objects.create()
 		conversation.participants.set(participants)
 		serializer = self.get_serializer(conversation)
@@ -40,6 +40,10 @@ class MessageViewSet(viewsets.ModelViewSet):
 		message_body = request.data.get('message_body')
 		sender = User.objects.get(user_id=sender_id)
 		conversation = Conversation.objects.get(conversation_id=conversation_id)
-		message = Message.objects.create(sender=sender, conversation=conversation, message_body=message_body)
+		message = Message.objects.create(
+			sender=sender,
+			conversation=conversation,
+			message_body=message_body,
+		)
 		serializer = self.get_serializer(message)
 		return Response(serializer.data, status=status.HTTP_201_CREATED)

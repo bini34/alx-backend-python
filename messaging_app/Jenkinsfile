@@ -1,0 +1,85 @@
+pipeline {
+    agent any
+
+    environment {
+        GIT_URL = 'https://github.com/bini34/alx-backend-python.git'
+        DOCKER_IMAGE = "bini34/messaging-app"
+        VENV_PATH = "${WORKSPACE}/messaging_app/.venv"
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', credentialsId: 'github-credentials', url: env.GIT_URL
+            }
+        }
+
+        stage('Prepare virtualenv') {
+            steps {
+                dir('messaging_app') {
+                    sh """
+                        python3 -m venv ${VENV_PATH}
+                        . ${VENV_PATH}/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                    """
+                }
+            }
+        }
+
+        stage('Apply migrations') {
+            steps {
+                dir('messaging_app') {
+                    sh """
+                        . ${VENV_PATH}/bin/activate
+                        python manage.py migrate --noinput
+                    """
+                }
+            }
+        }
+
+        stage('Run pytest') {
+            steps {
+                dir('messaging_app') {
+                    sh """
+                        . ${VENV_PATH}/bin/activate
+                        mkdir -p reports
+                        pytest --junitxml=reports/junit.xml --cov=messaging_app --cov-report=xml:reports/coverage.xml --cov-report=term
+                    """
+                }
+            }
+        }
+
+        stage('Archive reports') {
+            steps {
+                archiveArtifacts artifacts: 'messaging_app/reports/**/*.xml', fingerprint: true, allowEmptyArchive: true
+            }
+        }
+
+        stage('Build and push image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        dir('messaging_app') {
+                            def app = docker.build("${env.DOCKER_IMAGE}:${env.BUILD_NUMBER}")
+                            app.push()
+                            app.push('latest')
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: 'messaging_app/reports/junit.xml'
+            cleanWs()
+        }
+    }
+}
